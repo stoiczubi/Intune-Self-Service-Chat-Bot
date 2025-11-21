@@ -1,9 +1,23 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { ActionType, IntentResponse } from "../types";
 
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+// Initialize AI only if Key exists to prevent crash on load
+const apiKey = process.env.API_KEY;
+let ai: GoogleGenAI | null = null;
+
+if (apiKey) {
+  ai = new GoogleGenAI({ apiKey: apiKey });
+} else {
+  console.warn("⚠️ No API_KEY found in environment. App is running in 'Keyword Match' mode for testing.");
+}
 
 export const analyzeUserIntent = async (userMessage: string): Promise<IntentResponse> => {
+  // 1. Fallback Mode: If no API key, use simple keyword matching
+  if (!ai) {
+    return mockAnalyzeIntent(userMessage);
+  }
+
+  // 2. Standard AI Mode
   try {
     const prompt = `
       You are an IT Support Assistant for Mondelez International.
@@ -48,18 +62,49 @@ export const analyzeUserIntent = async (userMessage: string): Promise<IntentResp
       return JSON.parse(response.text) as IntentResponse;
     }
     
-    return {
-        intent: ActionType.NONE,
-        reasoning: "Failed to parse",
-        confirmationMessage: "I'm sorry, I didn't catch that. Could you try asking differently?"
-    };
+    throw new Error("Empty response from AI");
 
   } catch (error) {
     console.error("Gemini API Error", error);
+    // Fallback to keyword matching if API fails
+    return mockAnalyzeIntent(userMessage);
+  }
+};
+
+/**
+ * A simple offline mocker that matches keywords so you can test the UI
+ * without needing a valid Google Cloud API Key.
+ */
+const mockAnalyzeIntent = (msg: string): IntentResponse => {
+  const lower = msg.toLowerCase();
+  
+  if (lower.includes('bitlocker') || lower.includes('recovery') || lower.includes('key')) {
     return {
-      intent: ActionType.NONE,
-      reasoning: "Error",
-      confirmationMessage: "I'm having trouble connecting to the AI service. Please use the buttons below."
+      intent: ActionType.GET_BITLOCKER,
+      reasoning: "Keyword match: bitlocker",
+      confirmationMessage: "I can help you retrieve your BitLocker recovery key. Please select the device."
     };
   }
+
+  if (lower.includes('wipe') || lower.includes('lost') || lower.includes('stolen') || lower.includes('reset factory')) {
+    return {
+      intent: ActionType.WIPE,
+      reasoning: "Keyword match: wipe",
+      confirmationMessage: "I can help you wipe a lost or stolen device. Which device needs to be wiped?"
+    };
+  }
+
+  if (lower.includes('passcode') || lower.includes('pin') || lower.includes('unlock')) {
+    return {
+      intent: ActionType.RESET_PASSCODE,
+      reasoning: "Keyword match: passcode",
+      confirmationMessage: "I can help reset your mobile device passcode. Select the device below."
+    };
+  }
+
+  return {
+    intent: ActionType.NONE,
+    reasoning: "No keyword match",
+    confirmationMessage: "I'm currently in offline mode (No API Key). Please use the Quick Action buttons on the left, or type 'bitlocker', 'wipe', or 'passcode'."
+  };
 };
