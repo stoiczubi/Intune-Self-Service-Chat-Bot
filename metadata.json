@@ -1,0 +1,5 @@
+{
+  "name": "MDLZ IT Self-Service",
+  "description": "Self-service kiosk for Mondelez employees to manage device security via Intune.",
+  "requestFramePermissions": []
+}
